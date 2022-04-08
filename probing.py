@@ -1,12 +1,30 @@
 import numpy as np
 import torch
+import time
 from collections import defaultdict
 
 
 class SentenceData:
+    """
+    Thic class contains data for a tagged sentence
+    
+    Attributes
+    ----------
+    subwords : numpy array of strings
+        The subwords of a sentence. Mostly whole words, but punctuation marks as well
+    pos_tag_nums: numpy array of integers
+        The numbers representing part-of-speech tags. These numbers are read from a dictionary.
+    chunk_tags: numpy array of strings
+        Abbreviations for the chunk tag of a given subword.
+    
+    """
     
     def __init__(self, sentence_str, tag_dict):
-        
+        """
+        Arguments:
+        sentence_str : string
+            A multi-line string which containing words and their pos nad chung tags.
+        """
         lines = sentence_str.splitlines()
         n = len(lines)
         subwords, pos_tags, chunk_tags = [], [], []
@@ -35,6 +53,21 @@ class SentenceData:
         return self.chunk_tags
     
     def tokenize(self, tokenizer):
+        """
+        Arguments:
+        tokenizer
+            A BERT tokenizer.
+        
+        Returns two values: 
+            --  a list of tokens produced by the tokenizer.
+                The  first element is 101 <- [CLS], the last element is [SEP] indicating the sentence boundaries.
+                These tokens were not in the dataset, but we included their numerical value, because BERT uses them.
+            --  a list of integers depicting which token corresponds to which word in the sentence.
+                If the i-th token t_i = j, it means the i-th token corresponds to the j-th token in the sentence.
+                It is needed, since the tokenizer may separate a word into multiple subwords each one with a token
+                (if the word was not in the vocabulary of he tokenizer).
+                The  first and last elements are None, since the tokenizer uses a special token which indicates the start and end of the sentence.
+        """
         tokens = [101]
         #numbers which word the given token corresponds to
         token_word_idx = [None]
@@ -60,15 +93,18 @@ tag_list = ['CC','CD','DT','EX','FW','IN','JJ','JJR','JJS','LS','MD','NN','NNS',
 def get_tag_dict(tag_list):
     tag_dict = defaultdict(lambda: 0)
     for i, tag in enumerate(tag_list):
-        #start from 1
+        #start from 1, misc. tags get the number 0
         tag_dict[tag] = i+1
         
     return tag_dict
         
 
 def get_tags(file_path):
-    """
-    Extract all types of POS tags and chunk tags used in the file
+    """Extract all types of POS tags and chunk tags used in the file.
+    
+    Arguments:
+    file_path -- string form for the file path where the tagged data are
+    
     The sentences are separated with empty lines. Format example:
         Unilab NNP B-NP
         new JJ B-NP
@@ -86,10 +122,7 @@ def get_tags(file_path):
     chunk_tags = set()
     
     with open(file_path, 'r') as f:
-        
-            
         lines = f.readlines()
-        
         for l in list(filter(lambda x: x.strip() != "", lines)):
             parts = l.split()
             if (parts[2] != 'O'):
@@ -98,15 +131,22 @@ def get_tags(file_path):
             
     print(f"POS tags found: {pos_tags}")
     print(f"Chunk tags found: {sorted(list(chunk_tags))}")
+    
+    return pos_tags, chunk_tags
 
 def onehot_encode(n, size):
     out = np.zeros(size)
     out[n] = 1
     return np.squeeze(out)
 
+#THE PENN TREEBANK: AN OVERVIEW
 #http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.9.8216&rep=rep1&type=pdf
+#Chunking - description
 #http://www.iro.umontreal.ca/~felipe/IFT6010-Automne2001/conll.html
 def get_sentences(file_path):
+    """
+    
+    """
     
     sentences = []
     tags = get_tag_dict(tag_list)
@@ -155,20 +195,17 @@ def test_sentence(sentence_data):
         print(f"{ w } -> {type(w)}")
         
 #https://discuss.huggingface.co/t/output-attention-true-after-downloading-a-model/907
-def produce_hidden_states(sentences):
-    
-    tokenizer = torch.hub.load('huggingface/pytorch-transformers', 'tokenizer', 'bert-base-cased')
-    config = torch.hub.load('huggingface/pytorch-transformers', 'config', 'bert-base-cased', output_attention=True)
-    model = torch.hub.load('huggingface/pytorch-transformers', 'model', 'bert-base-cased', config=config)
-    
+def produce_hidden_states(layer_num, sentences, tokenizer,  model, first_sentence=0):
     
     saved_data = []
     
     with torch.no_grad():
         for sentence_num, sentence in enumerate(sentences):
+            if ((sentence_num+first_sentence)%100 == 0):
+                print(f"Sentence noumber: {sentence_num+first_sentence}")
             word_list = sentence.get_subwords()
             tokens, token_word_ids = sentence.tokenize(tokenizer)
-            print(f"token_word_ids num: {token_word_ids}")
+            #print(f"token_word_ids num: {token_word_ids}")
             pos_tags = sentence.get_tag_nums()
             
             tokens_tensor = torch.tensor([tokens])
@@ -192,7 +229,7 @@ def produce_hidden_states(sentences):
                 
                 if word_num is not None:
                     #print(f"layer num: {layer_num} state shape: {state.shape}")
-                    saved_data.append((sentence_num, word_num, pos_tags[word_num], subword_attentions))
+                    saved_data.append((sentence_num+first_sentence, word_num, pos_tags[word_num], subword_attentions))
             #print(f"token_word_ids num: {token_word_ids}")
             
     #print(f"saved_data: {saved_data}")
@@ -209,39 +246,86 @@ def produce_hidden_states(sentences):
 #    """
 #def generate_embeddings():
 
-def write_hidden_states(subword_data):
+def write_hidden_states(data, dest_folder, txt_format=False):
 
-    with open("layer_data/word_data.txt", 'w') as save_file:
-        for sw_d in subword_data:
+    with open(f"{dest_folder}/word_data.txt", 'w') as save_file:
+        for sw_d in data:
             sentence_num, word_num, pos_tag, hidden_states = sw_d
-            print(f"{sentence_num} {word_num} {pos_tag}\n")
+            #print(f"{sentence_num} {word_num} {pos_tag}")
             save_file.write(f"{sentence_num} {word_num} {pos_tag}\n")
+    
+    if txt_format:
+        
+        for layer_num in range(13):
+            path = f"{dest_folder}/hidden_states_{layer_num:02}.txt"
+            with open(path, 'a') as txt_file:
+                for i, sw_d in enumerate(data):
+                    hidden_state = sw_d[3][layer_num]
+                    txt_file.writeln(np.array(hidden_state))
+
             
-    for l_num in range(13):
-        layer_dict = {}
-        for i, sw_d in enumerate(subword_data):
-            hidden_state = subword_data[3][l_num]
-            layer_dict[i] = hidden_state
-            
-        torch.save(layer_dict, f"layer_data/hidden_states_{l_num:02}.pt")
+    else:
+        for layer_num in range(13):
+            layer_dict = {}
+            for i, sw_d in enumerate(data):
+                hidden_state = sw_d[3][layer_num]
+                layer_dict[i] = hidden_state
+            torch.save(layer_dict, f"{dest_folder}/hidden_states_{layer_num:02}.pt")
+        
+def read_hidden_states(layer_num, source_folder):
+    """Read hidden states for given layer from file.
+    
+    Arguments:
+    layer_num -- number of the layer (for 0 the layer is the initial embedding)
+    """
+    states = torch.load(f"{source_folder}/hidden_states_{layer_num:02}.pt")
+    
+    return states
         
     
 
 
 get_tags("conll2000/train.txt")
 
-#TODO load train pos_tag_data
+
+"""
+tokenizer = torch.hub.load('huggingface/pytorch-transformers', 'tokenizer', 'bert-base-cased')
+config = torch.hub.load('huggingface/pytorch-transformers', 'config', 'bert-base-cased', output_attention=True)
+model = torch.hub.load('huggingface/pytorch-transformers', 'model', 'bert-base-cased', config=config)
+
 
 sentences = get_sentences("conll2000/test.txt")
+print(f"number of sentences: {len(sentences)}")
+
+print("Start measuring time")
+start = time.time()
 
 
-#print(sentences[-1])
-#print("<><><><><><><><><><><><>")
-#test_sentence(sentences[0])
+dt = produce_hidden_states(sentences, tokenizer, model)
+write_hidden_states(dt, "test_data")
+end = time.time()
+print(end - start)
+"""
 
-dt = produce_hidden_states(sentences[:3])
 
-write_hidden_states(dt)
+
+tokenizer = torch.hub.load('huggingface/pytorch-transformers', 'tokenizer', 'bert-base-cased')
+config = torch.hub.load('huggingface/pytorch-transformers', 'config', 'bert-base-cased', output_attention=True)
+model = torch.hub.load('huggingface/pytorch-transformers', 'model', 'bert-base-cased', config=config)
+
+sentences = get_sentences("conll2000/train.txt")
+
+print(f"number of sentences: {len(sentences)}")
+print("Start measuring time")
+start = time.time()
+
+dt = []
+for i in range(5):
+    dt+=produce_hidden_states(sentences[i*2000:(i+1)*2000], tokenizer, model)
+write_hidden_states(dt, "train_data")
+end = time.time()
+print(end - start)
+
 #print(dt)
 
 #TODO save to 12 different files using torhc save
