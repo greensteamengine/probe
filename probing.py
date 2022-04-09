@@ -195,7 +195,7 @@ def test_sentence(sentence_data):
         print(f"{ w } -> {type(w)}")
         
 #https://discuss.huggingface.co/t/output-attention-true-after-downloading-a-model/907
-def produce_hidden_states(layer_num, sentences, tokenizer,  model, first_sentence=0):
+def produce_hidden_states(sentences, tokenizer,  model, first_sentence=0):
     
     saved_data = []
     
@@ -246,31 +246,42 @@ def produce_hidden_states(layer_num, sentences, tokenizer,  model, first_sentenc
 #    """
 #def generate_embeddings():
 
-def write_hidden_states(data, dest_folder, txt_format=False):
+def del_files(dest_folder):
+    open(f"{dest_folder}/word_data.txt", 'w').close()
 
-    with open(f"{dest_folder}/word_data.txt", 'w') as save_file:
+    for layer_num in range(13):
+        path = f"{dest_folder}/hidden_states_{layer_num:02}.txt"
+        open(path, 'w').close()
+
+
+def write_hidden_states(data, dest_folder):
+    #print(f"length of data: {len(data)}")
+    with open(f"{dest_folder}/word_data.txt", 'a') as save_file:
         for sw_d in data:
             sentence_num, word_num, pos_tag, hidden_states = sw_d
             #print(f"{sentence_num} {word_num} {pos_tag}")
             save_file.write(f"{sentence_num} {word_num} {pos_tag}\n")
     
-    if txt_format:
         
-        for layer_num in range(13):
-            path = f"{dest_folder}/hidden_states_{layer_num:02}.txt"
-            with open(path, 'a') as txt_file:
-                for i, sw_d in enumerate(data):
-                    hidden_state = sw_d[3][layer_num]
-                    txt_file.writeln(np.array(hidden_state))
-
-            
-    else:
-        for layer_num in range(13):
-            layer_dict = {}
+    for layer_num in range(13):
+        path = f"{dest_folder}/hidden_states_{layer_num:02}.txt"
+        with open(path, 'a') as txt_file:
+            states = []
             for i, sw_d in enumerate(data):
                 hidden_state = sw_d[3][layer_num]
-                layer_dict[i] = hidden_state
-            torch.save(layer_dict, f"{dest_folder}/hidden_states_{layer_num:02}.pt")
+                #print(hidden_state.shape)
+                hidden_state = np.array(hidden_state)
+                state_str = ' '.join(list(map(str, hidden_state)))
+                txt_file.write(state_str+'\n')
+
+    """
+    for layer_num in range(13):
+        layer_dict = {}
+        for i, sw_d in enumerate(data):
+            hidden_state = sw_d[3][layer_num]
+            layer_dict[i] = hidden_state
+        torch.save(layer_dict, f"{dest_folder}/hidden_states_{layer_num:02}.pt")
+    """
         
 def read_hidden_states(layer_num, source_folder):
     """Read hidden states for given layer from file.
@@ -282,7 +293,15 @@ def read_hidden_states(layer_num, source_folder):
     
     return states
         
-    
+def txt_to_pt(source_folder, layer_num):
+    name = f"{source_folder}/hidden_states_{layer_num:02}"
+    all_states = {}
+    for i, line in enumerate(open(f"{name}.txt", 'r')):
+        #tensor or numpy array better?
+        state = list(map(float, list(line.split())))
+        state = torch.tensor(state)
+        all_states[i] = state
+    torch.save(all_states, f"{name}.pt")
 
 
 get_tags("conll2000/train.txt")
@@ -309,23 +328,34 @@ print(end - start)
 
 
 
-tokenizer = torch.hub.load('huggingface/pytorch-transformers', 'tokenizer', 'bert-base-cased')
-config = torch.hub.load('huggingface/pytorch-transformers', 'config', 'bert-base-cased', output_attention=True)
-model = torch.hub.load('huggingface/pytorch-transformers', 'model', 'bert-base-cased', config=config)
+#tokenizer = torch.hub.load('huggingface/pytorch-transformers', 'tokenizer', 'bert-base-cased')
+#config = torch.hub.load('huggingface/pytorch-transformers', 'config', 'bert-base-cased', output_attention=True)
+#model = torch.hub.load('huggingface/pytorch-transformers', 'model', 'bert-base-cased', config=config)
 
-sentences = get_sentences("conll2000/train.txt")
+#sentences = get_sentences("conll2000/train.txt")
 
-print(f"number of sentences: {len(sentences)}")
-print("Start measuring time")
-start = time.time()
+#print(f"number of sentences: {len(sentences)}")
+#print("Start measuring time")
+#start = time.time()
 
-dt = []
+#WARNING watch out for deletion:
+"""
+#del_files("train_data")
+sentence_dt = []
 for i in range(5):
-    dt+=produce_hidden_states(sentences[i*2000:(i+1)*2000], tokenizer, model)
-write_hidden_states(dt, "train_data")
+    sentence_dt = produce_hidden_states(sentences[i*2000:(i+1)*2000], tokenizer, model, i*2000)
+    write_hidden_states(sentence_dt, "train_data")
 end = time.time()
 print(end - start)
+#time was 3100.05806350708
+"""
+#print(sentence_dt)
+print("START")
+start = time.time()
 
-#print(dt)
-
+for i in range(0, 13):
+    cur = time.time()
+    print(f"cur layer: {i} time: {cur - start}")
+    #txt_to_pt("train_data", i)
 #TODO save to 12 different files using torhc save
+
