@@ -2,6 +2,7 @@ import numpy as np
 import torch as pt
 import time
 from collections import defaultdict
+from itertools import islice
 
 
 class SentenceData:
@@ -136,9 +137,9 @@ def get_tags(file_path):
     return pos_tags, chunk_tags
 
 def onehot_encode(n, size):
-    out = np.zeros(size)
+    out = pt.zeros(size)
     out[n] = 1
-    return np.squeeze(out)
+    return out
 
 #THE PENN TREEBANK: AN OVERVIEW
 #http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.9.8216&rep=rep1&type=pdf
@@ -329,6 +330,24 @@ def read_tags_from_txt(source_folder):
         sentence_num, word_num, pos_tag, chunk_tag = list(map(int, line.split()))
 
         data_dict[i] = pt.tensor([sentence_num, word_num, pos_tag, chunk_tag])
+        
+
+def separate_dict(data_dict, first_proportion):
+    cur_key = 0
+    # Split dictionary while preserving order
+    # Both resulting dictionaries should be re-keyd starting from 0
+    d1, d2 = {}, {}
+    interval_size = round(len(data_dict) * first_proportion)
+    for i in range(interval_size):
+        d1[cur_key] = data_dict[i]
+        cur_key+=1
+    cur_key = 0
+    for i in range(interval_size, len(data_dict)):
+        d2[cur_key] = data_dict[i]
+        cur_key+=1
+    
+    return d1, d2
+
 
 
 
