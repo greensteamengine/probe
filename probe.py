@@ -146,53 +146,70 @@ def train(model, train_loader, eval_loader, optimizer, loss_function, EPOCHS):
 if __name__ == '__main__':
     pt.manual_seed(77)
     
-    cur_layer = 6
-    
-    large_meta = dh.read_tags_from_dt("train_data")
-    large_states = dh.read_states_from_dt("train_data", cur_layer)
-    
-    train_meta, eval_meta = dh.separate_dict(large_meta, 0.8)
-    train_states, eval_states = dh.separate_dict(large_states, 0.8)
+    for cur_layer in range(13):
+        large_meta = dh.read_tags_from_dt("train_data")
+        large_states = dh.read_states_from_dt("train_data", cur_layer)
+        
+        del large_meta
+        del large_states
+        
+        train_meta, eval_meta = dh.separate_dict(large_meta, 0.8)
+        train_states, eval_states = dh.separate_dict(large_states, 0.8)
 
+        
+        
+        #train_meta, eval_meta = dh.separate_dict(test_meta, 0.8)
+        #train_states, eval_states = dh.separate_dict(test_states, 0.8)
+        
+        #WARNING TODO test -> train
+        train_data = data_set(train_states, train_meta)
+        eval_data = data_set(eval_states, eval_meta)
+        
+        
+        train_loader = pt.utils.data.DataLoader(train_data, batch_size=100, shuffle=True, num_workers=1)
+        eval_loader = pt.utils.data.DataLoader(eval_data, batch_size=100, shuffle=True, num_workers=1)
+        
+        
+        model = MLP()
     
-    
-    #train_meta, eval_meta = dh.separate_dict(test_meta, 0.8)
-    #train_states, eval_states = dh.separate_dict(test_states, 0.8)
-    
-    #WARNING TODO test -> train
-    train_data = data_set(train_states, train_meta)
-    eval_data = data_set(eval_states, eval_meta)
-    
-    
-    train_loader = pt.utils.data.DataLoader(train_data, batch_size=100, shuffle=True, num_workers=1)
-    eval_loader = pt.utils.data.DataLoader(eval_data, batch_size=100, shuffle=True, num_workers=1)
-    
-    
-    model = MLP()
-  
-    #https://github.com/christianversloot/machine-learning-articles/blob/main/creating-a-multilayer-perceptron-with-pytorch-and-lightning.md
-    
-    # Define the loss function and optimizer
-    loss_function = nn.CrossEntropyLoss()
-    optimizer = pt.optim.Adam(model.parameters(), lr=1e-4)
+        #https://github.com/christianversloot/machine-learning-articles/blob/main/creating-a-multilayer-perceptron-with-pytorch-and-lightning.md
+        
+        # Define the loss function and optimizer
+        loss_function = nn.CrossEntropyLoss()
+        optimizer = pt.optim.Adam(model.parameters(), lr=1e-4)
 
-    #train(mlp, trainloader, optimizer, loss_function)
-    EPOCHS = 5
+        #train(mlp, trainloader, optimizer, loss_function)
+        EPOCHS = 5
 
-    train(model, train_loader, eval_loader, optimizer, loss_function, EPOCHS)
-    
-    del train_loader
-    del eval_loader
-    
-    print("TESTING")
-    
-    
-    test_meta = dh.read_tags_from_dt("test_data")
-    test_states = dh.read_states_from_dt("test_data", cur_layer)
-    test_data = data_set(test_states, test_meta)
-    
-    test_loader = pt.utils.data.DataLoader(test_data, batch_size=100, shuffle=True, num_workers=1)
-    
-    test_loss, test_acc = evaluate_run(model, test_loader, loss_function)
-    
-    print(f'\t Test Loss: {test_loss:.3f} |  Test Acc: {test_acc*100:.2f}%')
+        train(model, train_loader, eval_loader, optimizer, loss_function, EPOCHS)
+        
+        del train_loader
+        del eval_loader
+        
+        del train_data
+        del eval_data
+        
+        del train_meta
+        del eval_meta
+        del train_states
+        del eval_states
+        
+        print("TESTING")
+        
+        
+        test_meta = dh.read_tags_from_dt("test_data")
+        test_states = dh.read_states_from_dt("test_data", cur_layer)
+        test_data = data_set(test_states, test_meta)
+        
+        test_loader = pt.utils.data.DataLoader(test_data, batch_size=100, shuffle=True, num_workers=1)
+        
+        test_loss, test_acc = evaluate_run(model, test_loader, loss_function)
+        
+        print(f'\t Layer tested: {cur_layer} -> Test Loss: {test_loss:.3f} |  Test Acc: {test_acc*100:.2f}%')
+        
+        del test_meta
+        del test_states
+        del test_data
+        del test_loader
+        del test_loss
+        del test_acc
