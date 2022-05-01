@@ -197,6 +197,7 @@ def test_sentence(sentence_data):
         print(f"{ w } -> {type(w)}")
         
 #https://discuss.huggingface.co/t/output-attention-true-after-downloading-a-model/907
+# first_sentence -> the index of the first sentece. we had to make the runs in more parts, because of memory issues
 def produce_hidden_states(sentences, tokenizer,  model, first_sentence=0):
     
     saved_data = []
@@ -206,18 +207,18 @@ def produce_hidden_states(sentences, tokenizer,  model, first_sentence=0):
             if ((sentence_num)%100 == 0):
                 print(f"Sentence noumber: {sentence_num}")
             word_list = sentence.get_subwords()
-            tokens, token_word_ids = sentence.tokenize(tokenizer)
-            #print(f"token_word_ids num: {token_word_ids}")
+            tokens, token_to_word_ids = sentence.tokenize(tokenizer)
+            #print(f"token_to_word_ids num: {token_to_word_ids}")
             pos_tags = sentence.get_tag_nums()
             chunk_tags = sentence.get_chunk_tag_nums()
             
             tokens_tensor = pt.tensor([tokens])
         
-            #outputs =  model(tokens_tensor,token_type_ids = None,  output_hidden_states=True)
-            outputs = []
-            #print(f"token_word_ids: {token_word_ids}")
+            outputs =  model(tokens_tensor,token_type_ids = None,  output_hidden_states=True)
+            # outputs -> 
+            #print(f"token_to_word_ids: {token_to_word_ids}")
             #print(f"pos_tags: {list(pos_tags)}")
-            for token_num, word_num in enumerate(token_word_ids):
+            for token_num, word_num in enumerate(token_to_word_ids):
                 subword_attentions = []
                 #for layer_num, state in enumerate(outputs.hidden_states):
                 for layer_num, state in enumerate(outputs):
@@ -231,7 +232,7 @@ def produce_hidden_states(sentences, tokenizer,  model, first_sentence=0):
                 if word_num is not None:
                     #print(f"layer num: {layer_num} state shape: {state.shape}")
                     saved_data.append((sentence_num+first_sentence, word_num, pos_tags[word_num],  chunk_tags[word_num], subword_attentions))
-            #print(f"token_word_ids num: {token_word_ids}")
+            #print(f"token_to_word_ids num: {token_to_word_ids}")
             
     #print(f"saved_data: {saved_data}")
     return saved_data
@@ -332,21 +333,32 @@ def read_tags_from_txt(source_folder):
         data_dict[i] = pt.tensor([sentence_num, word_num, pos_tag, chunk_tag])
         
 
-def separate_dict(data_dict, first_proportion):
+def separate_dict(data_dict, first_proportion, limit = None):
     cur_key = 0
     # Split dictionary while preserving order
     # Both resulting dictionaries should be re-keyd starting from 0
     d1, d2 = {}, {}
-    interval_size = round(len(data_dict) * first_proportion)
+    total_length = len(data_dict)
+    if (limit != None):
+        total_length = limit
+        
+    interval_size = round(total_length * first_proportion)
+    
     for i in range(interval_size):
         d1[cur_key] = data_dict[i]
         cur_key+=1
     cur_key = 0
-    for i in range(interval_size, len(data_dict)):
+    for i in range(interval_size, total_length):
         d2[cur_key] = data_dict[i]
         cur_key+=1
     
     return d1, d2
+
+def print_conf_matrix(m):
+    for r in m:
+        for e in r:
+            print(int(e.item()), ' ', end='')
+    print('')
 
 
 
